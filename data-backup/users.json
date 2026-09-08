@@ -1,0 +1,37 @@
+[
+  {
+    "_id": "6a91064a262a2dc7e70754eb",
+    "employee_id": null,
+    "username": "admin",
+    "email": "admin@daututh79.com",
+    "password_hash": "$2b$12$TkxrvNnADEtbQd6D2qXcGOds1UXCQE6lKWZIFbu7QbdgWQ3CTLkti",
+    "status": "active",
+    "is_super_admin": 1,
+    "last_login_at": "2026-09-03T01:34:39.195Z",
+    "created_at": "2026-08-11 07:46:23",
+    "updated_at": "2026-09-03T01:34:39.195Z",
+    "avatar_path": "https://res.cloudinary.com/pk2dnrgh/image/upload/v1787966746/th79/hrm/employee-documents/avatars/user-6a91064a262a2dc7e70754eb-1787966744274.png",
+    "__v": 0,
+    "avatar_cloudinary_asset_id": "80866c62f88f509a4d92dbd6256d7a30",
+    "avatar_cloudinary_delivery_type": "upload",
+    "avatar_cloudinary_format": "png",
+    "avatar_cloudinary_public_id": "th79/hrm/employee-documents/avatars/user-6a91064a262a2dc7e70754eb-1787966744274",
+    "avatar_cloudinary_resource_type": "image",
+    "avatar_cloudinary_secure_url": "https://res.cloudinary.com/pk2dnrgh/image/upload/v1787966746/th79/hrm/employee-documents/avatars/user-6a91064a262a2dc7e70754eb-1787966744274.png",
+    "avatar_cloudinary_version": 1787966746,
+    "avatar_storage_provider": "cloudinary"
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ec",
+    "employee_id": 16,
+    "username": "minhhuy",
+    "email": "minhhuy123@gmail.com",
+    "password_hash": "$2y$10$ul5PRPa5u6FZ0pbDCGEJie0xZZMC.wFH56IXfOs6yKb1RM1AS/HRy",
+    "status": "active",
+    "is_super_admin": 0,
+    "last_login_at": "2026-08-13 15:57:16",
+    "created_at": "2026-08-13 08:56:56",
+    "updated_at": "2026-08-13 08:57:16",
+    "__v": 0
+  }
+]

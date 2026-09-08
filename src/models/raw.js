@@ -64,6 +64,7 @@ export const OnboardingCases = rawModel('onboarding_cases');
 export const OnboardingTasks = rawModel('onboarding_tasks');
 export const PayrollPeriods = rawModel('payroll_periods');
 export const PayrollItems = rawModel('payroll_items');
+export const PayrollSettings = rawModel('payroll_settings');
 export const SalaryProfiles = rawModel('salary_profiles');
 export const RecruitmentJobs = rawModel('recruitment_jobs');
 export const Candidates = rawModel('candidates');

@@ -1,0 +1,18 @@
+[
+  {
+    "_id": "6a910685018dae0f90651a7c",
+    "collection": "audit_logs",
+    "seq": 40,
+    "__v": 0
+  },
+  {
+    "_id": "6a9153fb10e1292cadf3b7fa",
+    "collection": "employee_document_files",
+    "seq": 4
+  },
+  {
+    "_id": "6a98d40a6f1bf650572ecf27",
+    "collection": "branches",
+    "seq": 10
+  }
+]

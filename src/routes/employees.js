@@ -15,6 +15,7 @@ import { getByLegacyId, idVariants, mapByLegacyId } from '../utils/legacyId.js';
 import { hydrateLegacyId, hydrateLegacyIds } from '../utils/legacySeedIdentity.js';
 import { getDigitalDocumentCoverage, getRequiredDocumentTypes } from '../services/documentCoverageService.js';
 import { ensureOrganizationIds } from '../services/organizationService.js';
+import { hasPermission } from '../services/permissionService.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -279,6 +280,7 @@ router.post('/', can('employee.create'), async (req, res) => {
   d.employee_code = d.employee_code || `TH79-NV${String(id).padStart(4, '0')}`;
   d.created_at = new Date(); d.updated_at = new Date(); d.deleted_at = null;
   await Employees.create(d);
+  if (hasPermission(req.auth, 'payroll.manage')) await upsertSalaryProfile(id, req.body);
   await EmployeeStatusHistory.create({ id: await nextId('employee_status_history'), employee_id: id, old_status: null, new_status: d.employment_status || 'active', effective_date: new Date().toISOString().slice(0, 10), reason: 'Tạo hồ sơ' });
   await audit(req, { module: 'employees', action: 'create', recordType: 'employee', recordId: id, employeeId: id, description: `Tạo hồ sơ nhân viên: ${d.full_name}`, newValues: d });
   res.status(201).json({ id });
@@ -289,6 +291,7 @@ router.put('/:id', can('employee.update'), async (req, res) => {
   if (!old) return res.status(404).json({ message: 'Không tìm thấy nhân viên.' });
   const d = sanitizeEmployee(req.body);
   await Employees.updateOne({ _id: old._id }, { $set: { ...d, updated_at: new Date() } });
+  if (hasPermission(req.auth, 'payroll.manage')) await upsertSalaryProfile(Number(old.id), req.body);
   if (d.employment_status && d.employment_status !== old.employment_status) {
     await EmployeeStatusHistory.create({ id: await nextId('employee_status_history'), employee_id: Number(old.id), old_status: old.employment_status, new_status: d.employment_status, effective_date: new Date().toISOString().slice(0, 10), reason: 'Cập nhật hồ sơ' });
   }
@@ -296,12 +299,50 @@ router.put('/:id', can('employee.update'), async (req, res) => {
   res.json({ ok: true, id: old.id });
 });
 
+// Xóa hàng loạt là xóa mềm: dữ liệu hồ sơ, hợp đồng, file Cloudinary và lịch sử
+// vẫn được giữ để có thể phục hồi/đối soát khi cần.
+router.post('/bulk-delete', can('employee.delete'), async (req, res) => {
+  const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map(String).filter(Boolean))];
+  if (!ids.length) return res.status(400).json({ message: 'Chưa chọn nhân viên cần xóa.' });
+  if (ids.length > 500) return res.status(400).json({ message: 'Mỗi lần chỉ được xóa tối đa 500 nhân viên.' });
+
+  const mongoIds = [];
+  const deleted = [];
+  for (const id of ids) {
+    const e = await employeeById(id);
+    if (!e?._id) continue;
+    mongoIds.push(e._id);
+    deleted.push({ id: e.id, full_name: e.full_name, employee_code: e.employee_code });
+  }
+  if (!mongoIds.length) return res.status(404).json({ message: 'Không tìm thấy nhân viên hợp lệ để xóa.' });
+
+  const now = new Date();
+  await Employees.updateMany({ _id: { $in: mongoIds } }, { $set: { deleted_at: now, employment_status: 'inactive', updated_at: now } });
+  await audit(req, { module: 'employees', action: 'bulk_delete', recordType: 'employee', description: `Xóa mềm hàng loạt ${deleted.length} nhân viên`, newValues: { employees: deleted } });
+  res.json({ ok: true, deleted: deleted.length, message: `Đã xóa mềm ${deleted.length} nhân viên.` });
+});
+
+router.post('/delete-all', can('employee.delete'), async (req, res) => {
+  if (!req.auth?.isSuperAdmin) return res.status(403).json({ message: 'Chỉ Super Admin được phép xóa toàn bộ nhân sự.' });
+  const confirmation = String(req.body.confirmation || '').trim().toUpperCase();
+  if (confirmation !== 'XOA TAT CA NHAN SU') {
+    return res.status(400).json({ message: 'Xác nhận không đúng. Hãy nhập chính xác: XOA TAT CA NHAN SU' });
+  }
+  const filter = { $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] };
+  const count = await Employees.countDocuments(filter);
+  if (!count) return res.json({ ok: true, deleted: 0, message: 'Không còn nhân viên đang hoạt động để xóa.' });
+  const now = new Date();
+  await Employees.updateMany(filter, { $set: { deleted_at: now, employment_status: 'inactive', updated_at: now } });
+  await audit(req, { module: 'employees', action: 'delete_all', recordType: 'employee', description: `Xóa mềm toàn bộ ${count} nhân viên`, newValues: { count } });
+  res.json({ ok: true, deleted: count, message: `Đã xóa mềm toàn bộ ${count} nhân viên.` });
+});
+
 router.delete('/:id', can('employee.delete'), async (req, res) => {
   const e = await employeeById(req.params.id);
   if (!e) return res.status(404).json({ message: 'Không tìm thấy nhân viên.' });
   await Employees.updateOne({ _id: e._id }, { $set: { deleted_at: new Date(), employment_status: 'inactive', updated_at: new Date() } });
   await audit(req, { module: 'employees', action: 'delete', recordType: 'employee', recordId: e.id, employeeId: e.id, description: `Xóa mềm hồ sơ: ${e.full_name}` });
-  res.json({ ok: true });
+  res.json({ ok: true, message: `Đã xóa mềm hồ sơ ${e.full_name}.` });
 });
 
 function toDate(v) {
@@ -335,12 +376,50 @@ function sanitizeEmployee(b) {
     'branch_id','department_id','position_id','contract_status_id','employee_code','full_name','gender',
     'date_of_birth','professional_qualification','identity_number','permanent_address','current_address','phone','email',
     'social_insurance_number','social_insurance_status','social_insurance_raw','join_date','probation_end_date',
-    'recruitment_decision_no','employment_status','note'
+    'recruitment_decision_no','employment_status','bank_account_number','bank_name','tax_dependents','note'
   ];
   const o = {};
   for (const k of keys) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k];
   for (const k of ['branch_id','department_id','position_id','contract_status_id']) o[k] = o[k] ? Number(o[k]) : null;
+  if (Object.prototype.hasOwnProperty.call(o, 'tax_dependents')) o.tax_dependents = Math.max(0, Math.floor(Number(o.tax_dependents) || 0));
   return o;
+}
+
+
+function salaryNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+async function upsertSalaryProfile(employeeId, body = {}) {
+  const salaryKeys = [
+    'base_salary','probation_salary','insurance_salary','lunch_allowance','fuel_allowance',
+    'phone_allowance','attendance_allowance','other_allowance','salary_effective_from'
+  ];
+  if (!salaryKeys.some(k => Object.prototype.hasOwnProperty.call(body, k))) return;
+
+  const payload = {
+    base_salary: salaryNumber(body.base_salary),
+    probation_salary: salaryNumber(body.probation_salary),
+    insurance_salary: salaryNumber(body.insurance_salary || body.base_salary),
+    lunch_allowance: salaryNumber(body.lunch_allowance),
+    fuel_allowance: salaryNumber(body.fuel_allowance),
+    phone_allowance: salaryNumber(body.phone_allowance),
+    attendance_allowance: salaryNumber(body.attendance_allowance),
+    other_allowance: salaryNumber(body.other_allowance),
+    effective_from: body.salary_effective_from || body.join_date || new Date().toISOString().slice(0, 10),
+    updated_at: new Date()
+  };
+
+  const existing = await SalaryProfiles.findOne({ employee_id: { $in: idVariants(employeeId) } }).sort({ effective_from: -1, id: -1 });
+  if (existing) {
+    await SalaryProfiles.updateOne({ _id: existing._id }, { $set: payload });
+  } else {
+    await SalaryProfiles.create({
+      id: await nextId('salary_profiles'), company_id: 1, employee_id: Number(employeeId),
+      ...payload, created_at: new Date()
+    });
+  }
 }
 
 export default router;

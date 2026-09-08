@@ -1,0 +1,212 @@
+[
+  {
+    "_id": "6a91064a262a2dc7e707546c",
+    "permission_code": "employee.view",
+    "permission_name": "Xem danh sách / hồ sơ nhân sự",
+    "module": "employees",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707546d",
+    "permission_code": "employee.create",
+    "permission_name": "Thêm nhân viên",
+    "module": "employees",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707546e",
+    "permission_code": "employee.update",
+    "permission_name": "Chỉnh sửa nhân viên",
+    "module": "employees",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707546f",
+    "permission_code": "employee.delete",
+    "permission_name": "Cho nghỉ / xóa nhân viên",
+    "module": "employees",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075470",
+    "permission_code": "document.view",
+    "permission_name": "Xem hồ sơ giấy tờ",
+    "module": "documents",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075471",
+    "permission_code": "document.upload",
+    "permission_name": "Upload hồ sơ giấy tờ",
+    "module": "documents",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075472",
+    "permission_code": "contract.view",
+    "permission_name": "Xem hợp đồng",
+    "module": "contracts",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075473",
+    "permission_code": "contract.manage",
+    "permission_name": "Tạo / chỉnh sửa hợp đồng",
+    "module": "contracts",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075474",
+    "permission_code": "attendance.view",
+    "permission_name": "Xem chấm công",
+    "module": "attendance",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075475",
+    "permission_code": "attendance.manage",
+    "permission_name": "Quản lý chấm công",
+    "module": "attendance",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075476",
+    "permission_code": "payroll.view",
+    "permission_name": "Xem tiền lương",
+    "module": "payroll",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075477",
+    "permission_code": "payroll.manage",
+    "permission_name": "Quản lý tiền lương",
+    "module": "payroll",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075478",
+    "permission_code": "recruitment.manage",
+    "permission_name": "Quản lý tuyển dụng",
+    "module": "recruitment",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075479",
+    "permission_code": "training.manage",
+    "permission_name": "Quản lý đào tạo",
+    "module": "training",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707547a",
+    "permission_code": "system.manage",
+    "permission_name": "Quản trị hệ thống",
+    "module": "system",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707547b",
+    "permission_code": "employee.import",
+    "permission_name": "Cập nhật nhân sự bằng Excel",
+    "module": "employees",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707547c",
+    "permission_code": "contract.upload",
+    "permission_name": "Upload file hợp đồng",
+    "module": "contracts",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707547d",
+    "permission_code": "audit.view",
+    "permission_name": "Xem lịch sử hoạt động",
+    "module": "system",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707547e",
+    "permission_code": "dashboard.view",
+    "permission_name": "Xem Dashboard",
+    "module": "dashboard",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707547f",
+    "permission_code": "employee.sensitive.view",
+    "permission_name": "Xem dữ liệu nhân sự nhạy cảm",
+    "module": "employees",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075480",
+    "permission_code": "document.delete",
+    "permission_name": "Xóa file hồ sơ nhân viên",
+    "module": "documents",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075481",
+    "permission_code": "recruitment.view",
+    "permission_name": "Xem tuyển dụng",
+    "module": "recruitment",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075482",
+    "permission_code": "training.view",
+    "permission_name": "Xem đào tạo",
+    "module": "training",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075483",
+    "permission_code": "report.view",
+    "permission_name": "Xem báo cáo",
+    "module": "reports",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075484",
+    "permission_code": "organization.view",
+    "permission_name": "Xem danh mục tổ chức",
+    "module": "organization",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075485",
+    "permission_code": "organization.manage",
+    "permission_name": "Thêm / sửa / xóa chi nhánh, phòng ban, chức vụ",
+    "module": "organization",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075486",
+    "permission_code": "user.view",
+    "permission_name": "Xem tài khoản đăng nhập",
+    "module": "users",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075487",
+    "permission_code": "user.manage",
+    "permission_name": "Thêm / sửa / khóa tài khoản đăng nhập",
+    "module": "users",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075488",
+    "permission_code": "role.view",
+    "permission_name": "Xem vai trò và phân quyền",
+    "module": "roles",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075489",
+    "permission_code": "role.manage",
+    "permission_name": "Quản lý vai trò và phân quyền",
+    "module": "roles",
+    "__v": 0
+  }
+]

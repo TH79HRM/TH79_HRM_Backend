@@ -1,0 +1,38 @@
+[
+  {
+    "_id": "6a910649262a2dc7e7075092",
+    "document_code": "SYLL",
+    "document_name": "Sơ yếu lý lịch",
+    "is_required": 1,
+    "has_expiry": 0,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a910649262a2dc7e7075093",
+    "document_code": "HEALTH_CHECK",
+    "document_name": "Giấy khám sức khỏe",
+    "is_required": 1,
+    "has_expiry": 1,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a910649262a2dc7e7075094",
+    "document_code": "CCCD_COPY",
+    "document_name": "Bản sao CCCD",
+    "is_required": 1,
+    "has_expiry": 0,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a910649262a2dc7e7075095",
+    "document_code": "DEGREE_COPY",
+    "document_name": "Bản sao văn bằng/chứng chỉ",
+    "is_required": 1,
+    "has_expiry": 0,
+    "status": "active",
+    "__v": 0
+  }
+]

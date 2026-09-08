@@ -1,0 +1,66 @@
+[
+  {
+    "_id": "6a91064a262a2dc7e707549e",
+    "role_code": "ADMIN",
+    "role_name": "Quản trị hệ thống",
+    "description": "Toàn quyền hệ thống",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e707549f",
+    "role_code": "HR",
+    "role_name": "Nhân sự",
+    "description": "Quản lý hồ sơ và nghiệp vụ nhân sự",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a0",
+    "role_code": "MANAGER",
+    "role_name": "Quản lý",
+    "description": "Xem/quản lý nhân sự theo phạm vi",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a1",
+    "role_code": "EMPLOYEE",
+    "role_name": "Nhân viên",
+    "description": "Xem thông tin cá nhân",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a2",
+    "role_code": "ACCOUNTANT",
+    "role_name": "Kế toán",
+    "description": "Mẫu quyền Kế toán: chỉ xem bảng lương. Admin có thể bật thêm quyền theo từng tài khoản.",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a3",
+    "role_code": "HCNS",
+    "role_name": "Hành chính - Nhân sự",
+    "description": "Mẫu quyền HCNS: xem thông tin nhân sự và hồ sơ nhân viên; không xem tiền lương.",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a4",
+    "role_code": "VAN_THU",
+    "role_name": "Văn thư",
+    "description": "Mẫu quyền Văn thư: xem hợp đồng lao động; không xem tiền lương.",
+    "is_system": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a5",
+    "role_code": "CUSTOM_ADMIN",
+    "role_name": "Quản trị tùy quyền",
+    "description": "Tài khoản quản trị không có quyền nghiệp vụ mặc định ngoài Dashboard; Super Admin bật/tắt từng mục theo nhu cầu.",
+    "is_system": 1,
+    "__v": 0
+  }
+]

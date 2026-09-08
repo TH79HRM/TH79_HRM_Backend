@@ -1,0 +1,56 @@
+[
+  {
+    "_id": "6a91064a262a2dc7e7075220",
+    "leave_code": "ANNUAL",
+    "leave_name": "Nghỉ phép năm",
+    "is_paid": 1,
+    "annual_quota": 12,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075221",
+    "leave_code": "SICK",
+    "leave_name": "Nghỉ ốm",
+    "is_paid": 0,
+    "annual_quota": null,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075222",
+    "leave_code": "UNPAID",
+    "leave_name": "Nghỉ không lương",
+    "is_paid": 0,
+    "annual_quota": null,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075223",
+    "leave_code": "MARRIAGE",
+    "leave_name": "Nghỉ kết hôn",
+    "is_paid": 1,
+    "annual_quota": null,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075224",
+    "leave_code": "BEREAVEMENT",
+    "leave_name": "Nghỉ tang",
+    "is_paid": 1,
+    "annual_quota": null,
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e7075225",
+    "leave_code": "MATERNITY",
+    "leave_name": "Nghỉ thai sản",
+    "is_paid": 0,
+    "annual_quota": null,
+    "status": "active",
+    "__v": 0
+  }
+]
