@@ -10,15 +10,42 @@ function isUserDocument(value) {
 
 async function resolveUser(userOrId) {
   if (isUserDocument(userOrId)) return userOrId;
+  const strId = String(userOrId || '').trim();
+  if (!strId) return null;
 
   const clauses = [];
+  if (mongoose.isValidObjectId(strId)) {
+    try {
+      clauses.push({ _id: new mongoose.Types.ObjectId(strId) });
+    } catch {}
+  }
+  clauses.push({ _id: strId });
+
   const variants = idVariants(userOrId);
   if (variants.length) clauses.push({ id: { $in: variants } });
-  if (mongoose.isValidObjectId(String(userOrId || ''))) {
-    clauses.push({ _id: new mongoose.Types.ObjectId(String(userOrId)) });
-  }
-  if (!clauses.length) return null;
-  return Users.findOne(clauses.length === 1 ? clauses[0] : { $or: clauses }).lean();
+  clauses.push({ username: strId }, { email: strId });
+
+  try {
+    const rawColl = Users.collection;
+    if (rawColl) {
+      const activeUser = await rawColl.findOne({
+        $or: clauses,
+        status: { $in: ['active', '1', 1, true, undefined, null] }
+      });
+      if (activeUser) return activeUser;
+
+      const anyUser = await rawColl.findOne({ $or: clauses });
+      if (anyUser) return anyUser;
+    }
+  } catch {}
+
+  const activeUser = await Users.findOne({
+    $or: clauses,
+    status: { $in: ['active', '1', 1, true, undefined, null] }
+  }).lean();
+
+  if (activeUser) return activeUser;
+  return Users.findOne({ $or: clauses }).lean();
 }
 
 export async function permissionSnapshot(userOrId) {
