@@ -1,17 +1,19 @@
 import { Router } from 'express';
 import {
   Employees, Branches, Departments, OnboardingCases, OnboardingTasks,
-  DocumentTypes, EmployeeChangeRequests
+  DocumentTypes, EmployeeChangeRequests, AttendanceRecords, LeaveRequests, AttendanceAdjustments
 } from '../models/raw.js';
 import { notificationFeed } from '../services/notificationService.js';
 import { analyticsSnapshot, anomalyList } from '../services/analyticsService.js';
 import { enrichEmployees } from '../services/employeeService.js';
 import { getDigitalDocumentCoverage, getRequiredDocumentTypes } from '../services/documentCoverageService.js';
+import { vnNowParts } from '../services/attendanceService.js';
 
 const router=Router();
 
 router.get('/',async(req,res)=>{
-  const [total,probation,active,branches,departments,analytics,alertsAll,pendingSelfService]=await Promise.all([
+  const todayStr=vnNowParts().dateStr;
+  const [total,probation,active,branches,departments,analytics,alertsAll,pendingSelfService,pendingLeaves,pendingAdjustments,todayAttendance]=await Promise.all([
     Employees.countDocuments({deleted_at:null}),
     Employees.countDocuments({deleted_at:null,employment_status:'probation'}),
     Employees.countDocuments({deleted_at:null,employment_status:'active'}),
@@ -19,7 +21,10 @@ router.get('/',async(req,res)=>{
     Departments.countDocuments({status:'active'}),
     analyticsSnapshot(),
     notificationFeed(250),
-    EmployeeChangeRequests.countDocuments({status:'pending'})
+    EmployeeChangeRequests.countDocuments({status:'pending'}),
+    LeaveRequests.countDocuments({status:'pending'}),
+    AttendanceAdjustments.countDocuments({status:'pending'}),
+    AttendanceRecords.find({work_date:todayStr}).lean()
   ]);
 
   const [onboarding,onboardingTotal,onboardingDone,requiredTypes,recentRaw,anomalies]=await Promise.all([
@@ -54,7 +59,13 @@ router.get('/',async(req,res)=>{
       in_progress:onboarding,
       progress:onboardingTotal?Math.round(onboardingDone/onboardingTotal*100):0
     },
-    pendingSelfService,
+    pendingSelfService: pendingSelfService + pendingLeaves + pendingAdjustments,
+    attendanceToday: {
+      date: todayStr,
+      checked_in: todayAttendance.length,
+      late: todayAttendance.filter(r => r.status === 'late' || r.status === 'late_and_early' || Number(r.late_minutes || 0) > 0).length,
+      checked_out: todayAttendance.filter(r => Boolean(r.check_out_time)).length
+    },
     anomalyCount:anomalies.length,
     smartAlerts:{
       total:alertsAll.length,

@@ -77,3 +77,7 @@ export const EmployeeDecisions = rawModel('employee_decisions');
 export const AttendanceRecords = rawModel('attendance_records');
 export const LeaveRequests = rawModel('leave_requests');
 export const LeaveTypes = rawModel('leave_types');
+export const WorkShifts = rawModel('work_shifts');
+export const EmployeeBiometrics = rawModel('employee_biometrics');
+export const PublicHolidays = rawModel('public_holidays');
+export const AttendanceAdjustments = rawModel('attendance_adjustments');

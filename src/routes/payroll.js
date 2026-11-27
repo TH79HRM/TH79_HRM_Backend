@@ -8,6 +8,8 @@ import { nextId } from '../utils/id.js';
 import { audit } from '../services/auditService.js';
 import { enrichEmployees, employeeById } from '../services/employeeService.js';
 import { idVariants } from '../utils/legacyId.js';
+import { buildMonthlyTimesheet } from '../services/attendanceService.js';
+import { assertValid, isValidDate, isValidNumber } from '../utils/validation.js';
 
 const router = Router();
 
@@ -52,6 +54,7 @@ router.get('/settings', can('payroll.view'), async (req, res, next) => {
 router.put('/settings', can('payroll.manage'), async (req, res, next) => {
   try {
     const current = await getSettings();
+    validateSettingsInput(req.body);
     const row = sanitizeSettings(req.body, current);
     const existing = await PayrollSettings.findOne({ company_id: 1 });
     if (existing) await PayrollSettings.updateOne({ _id: existing._id }, { $set: { ...row, updated_at: new Date() } });
@@ -63,9 +66,16 @@ router.put('/settings', can('payroll.manage'), async (req, res, next) => {
 
 router.post('/periods', can('payroll.manage'), async (req, res, next) => {
   try {
-    const month = Math.max(1, Math.min(12, Number(req.body.month)));
+    const month = Number(req.body.month);
     const year = Number(req.body.year);
-    if (!year || year < 2000 || year > 2200) return res.status(400).json({ message: 'Năm kỳ lương không hợp lệ.' });
+    assertValid(isValidNumber(month, { min: 1, max: 12, integer: true }), 'Tháng kỳ lương phải là số nguyên từ 1 đến 12.');
+    assertValid(isValidNumber(year, { min: 2000, max: 2200, integer: true }), 'Năm kỳ lương phải là số nguyên từ 2000 đến 2200.');
+    const standardWorkDays = req.body.standard_work_days ?? 26;
+    assertValid(isValidNumber(standardWorkDays, { min: 1, max: 31 }), 'Công chuẩn phải từ 1 đến 31 ngày.');
+    assertValid(Number(standardWorkDays) * 2 % 1 === 0, 'Công chuẩn phải theo bước 0,5 ngày.');
+    if (req.body.name) assertValid(String(req.body.name).trim().length <= 120, 'Tên kỳ lương không được vượt quá 120 ký tự.');
+    if (req.body.salary_code) assertValid(/^[A-Za-z0-9._/-]{2,40}$/.test(String(req.body.salary_code).trim()), 'Mã kỳ lương chỉ được chứa chữ, số, dấu chấm, gạch chéo, gạch ngang hoặc gạch dưới.');
+    assertValid(['draft', 'approved', 'paid', 'closed'].includes(req.body.status || 'draft'), 'Trạng thái kỳ lương không hợp lệ.');
     const existed = await PayrollPeriods.findOne({ salary_month: month, salary_year: year });
     if (existed) return res.status(409).json({ message: `Đã tồn tại kỳ lương ${month}/${year}.` });
 
@@ -75,7 +85,7 @@ router.post('/periods', can('payroll.manage'), async (req, res, next) => {
       salary_code: req.body.salary_code || `TH79-${year}-${String(month).padStart(2, '0')}`,
       salary_month: month, salary_year: year,
       salary_name: req.body.name || `Bảng lương ${month}/${year}`,
-      standard_work_days: positive(req.body.standard_work_days, 26),
+      standard_work_days: Number(standardWorkDays),
       total_employee: 0, total_gross: 0, total_deduction: 0, total_net: 0,
       status: req.body.status || 'draft', approved_by: null, approved_at: null,
       note: req.body.note || null, created_at: new Date(), updated_at: new Date()
@@ -115,6 +125,44 @@ router.post('/periods/:id/sync-employees', can('payroll.manage'), async (req, re
   } catch (error) { next(error); }
 });
 
+router.post('/periods/:id/sync-attendance', can('payroll.manage'), async (req, res, next) => {
+  try {
+    const period = await findPeriod(req.params.id);
+    if (!period) return res.status(404).json({ message: 'Không tìm thấy kỳ lương.' });
+    await syncEmployeesToPeriod(period, { refreshExisting: false });
+    const sheet = await buildMonthlyTimesheet({ month: period.salary_month, year: period.salary_year });
+    const sheetByEmp = new Map(sheet.items.map(x => [Number(x.employee_id), x]));
+    const settings = await getSettings();
+    const items = await PayrollItems.find({ payroll_period_id: { $in: idVariants(period.id) } }).lean();
+    const employees = await enrichEmployees(await Employees.find({ id: { $in: items.map(x => Number(x.employee_id)).filter(Number.isFinite) } }).lean());
+    const em = new Map(employees.map(x => [Number(x.id), x]));
+
+    let updatedCount = 0;
+    for (const item of items) {
+      const ts = sheetByEmp.get(Number(item.employee_id));
+      if (!ts) continue;
+      const employee = em.get(Number(item.employee_id));
+      const standard = positive(item.standard_work_days, period.standard_work_days || 26);
+      const applied = nonNegative(item.applied_salary) || nonNegative(item.base_salary);
+      const hourlyRate = applied > 0 ? applied / (standard * 8) : 0;
+      const otHours = nonNegative(ts.overtime_hours);
+      const otPay = roundMoney(otHours * hourlyRate * 1.5);
+      const patch = {
+        ...item,
+        actual_work_days: ts.payable_work_days,
+        overtime_hours: otHours,
+        overtime_pay: otPay
+      };
+      const calculated = calculateItem(patch, employee, settings, false);
+      await PayrollItems.updateOne({ _id: item._id }, { $set: { ...calculated, updated_at: new Date() } });
+      updatedCount++;
+    }
+    await recomputePeriodTotals(period.id);
+    await audit(req, { module: 'payroll', action: 'sync_attendance', recordType: 'payroll_period', recordId: period.id, description: `Đồng bộ bảng công tháng ${period.salary_month}/${period.salary_year} vào kỳ lương (${updatedCount} NV)` });
+    res.json({ ok: true, updated: updatedCount, message: `Đã đồng bộ ngày công & OT từ Chấm công cho ${updatedCount} nhân viên.` });
+  } catch (error) { next(error); }
+});
+
 router.post('/periods/:id/recalculate', can('payroll.manage'), async (req, res, next) => {
   try {
     const period = await findPeriod(req.params.id);
@@ -149,9 +197,30 @@ router.put('/periods/:periodId/items/:itemId', can('payroll.manage'), async (req
       'social_insurance_employee','health_insurance_employee','unemployment_insurance_employee',
       'personal_income_tax','other_deduction','tax_dependents'
     ];
-    for (const k of numericFields) if (Object.prototype.hasOwnProperty.call(req.body, k)) patch[k] = nonNegative(req.body[k]);
-    if (Object.prototype.hasOwnProperty.call(req.body, 'note')) patch.note = req.body.note || null;
-    if (Object.prototype.hasOwnProperty.call(req.body, 'manual_deductions')) patch.manual_deductions = Boolean(req.body.manual_deductions);
+    for (const k of numericFields) {
+      if (!Object.prototype.hasOwnProperty.call(req.body, k)) continue;
+      const max = k === 'overtime_hours' ? 744 : 1_000_000_000_000;
+      assertValid(isValidNumber(req.body[k], { min: 0, max }), `${k} phải là số không âm hợp lệ${k === 'overtime_hours' ? ' và không vượt 744 giờ' : ''}.`);
+      patch[k] = Number(req.body[k]);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'actual_work_days')) {
+      assertValid(Number(req.body.actual_work_days) <= Number(item.standard_work_days || period.standard_work_days || 26) * 2, 'Ngày công không được vượt quá 2 lần công chuẩn.');
+      assertValid(Number(req.body.actual_work_days) * 2 % 1 === 0, 'Ngày công phải theo bước 0,5 ngày.');
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'overtime_hours')) {
+      assertValid(Number(req.body.overtime_hours) * 2 % 1 === 0, 'Giờ OT phải theo bước 0,5 giờ.');
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'tax_dependents')) {
+      assertValid(isValidNumber(req.body.tax_dependents, { min: 0, max: 100, integer: true }), 'Số người phụ thuộc phải là số nguyên từ 0 đến 100.');
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'note')) {
+      assertValid(req.body.note === null || typeof req.body.note === 'string' && req.body.note.length <= 2000, 'Ghi chú không được vượt quá 2.000 ký tự.');
+      patch.note = req.body.note || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'manual_deductions')) {
+      assertValid(typeof req.body.manual_deductions === 'boolean', 'Chế độ khấu trừ không hợp lệ.');
+      patch.manual_deductions = req.body.manual_deductions;
+    }
 
     // Khi người dùng trực tiếp sửa một khoản khấu trừ, giữ các số đó cho tới
     // khi họ bấm "Tính lại theo quy định".
@@ -160,6 +229,11 @@ router.put('/periods/:periodId/items/:itemId', can('payroll.manage'), async (req
     if (touchedDeduction) patch.manual_deductions = true;
 
     const calculated = calculateItem(patch, employee, settings, Boolean(req.body.force_auto));
+    if (touchedDeduction) {
+      const deductions = ['social_insurance_employee','health_insurance_employee','unemployment_insurance_employee','personal_income_tax','other_deduction']
+        .reduce((sum, key) => sum + Number(calculated[key] || 0), 0);
+      assertValid(deductions <= Number(calculated.gross_salary || 0), 'Tổng khấu trừ không được vượt quá lương Gross.');
+    }
     await PayrollItems.updateOne({ _id: item._id }, { $set: { ...calculated, updated_at: new Date() } });
     await recomputePeriodTotals(period.id);
     const updated = await PayrollItems.findById(item._id).lean();
@@ -341,6 +415,43 @@ async function recomputePeriodTotals(periodId) {
 async function getSettings() {
   const row = await PayrollSettings.findOne({ company_id: 1 }).lean();
   return sanitizeSettings(row || {}, DEFAULT_SETTINGS);
+}
+
+function validateSettingsInput(body = {}) {
+  for (const [field, label] of [
+    ['bhxh_employee_rate', 'Tỷ lệ BHXH'], ['bhyt_employee_rate', 'Tỷ lệ BHYT'],
+    ['bhtn_employee_rate', 'Tỷ lệ BHTN']
+  ]) {
+    if (body[field] !== undefined) assertValid(isValidNumber(body[field], { min: 0, max: 100 }), `${label} phải từ 0 đến 100%.`);
+  }
+  for (const [field, label] of [
+    ['personal_deduction', 'Mức giảm trừ bản thân'], ['dependent_deduction', 'Mức giảm trừ người phụ thuộc']
+  ]) {
+    if (body[field] !== undefined) assertValid(isValidNumber(body[field], { min: 0, max: 1_000_000_000_000 }), `${label} phải là số không âm hợp lệ.`);
+  }
+  if (body.effective_year !== undefined) {
+    assertValid(isValidNumber(body.effective_year, { min: 2000, max: 2200, integer: true }), 'Năm hiệu lực phải là số nguyên từ 2000 đến 2200.');
+  }
+  if (body.effective_from !== undefined) assertValid(isValidDate(body.effective_from), 'Ngày hiệu lực không hợp lệ.');
+  if (body.version !== undefined) {
+    const version = String(body.version).trim();
+    assertValid(version.length >= 2 && version.length <= 60, 'Mã phiên bản phải có từ 2 đến 60 ký tự.');
+  }
+  if (body.pit_brackets !== undefined) {
+    const brackets = body.pit_brackets;
+    assertValid(Array.isArray(brackets) && brackets.length > 0 && brackets.length <= 10, 'Biểu thuế phải có từ 1 đến 10 bậc.');
+    let previousLimit = 0;
+    for (const [index, bracket] of brackets.entries()) {
+      assertValid(isValidNumber(bracket?.rate, { min: 0, max: 100 }), `Thuế suất bậc ${index + 1} phải từ 0 đến 100%.`);
+      if (index === brackets.length - 1) {
+        assertValid(bracket.up_to === null || bracket.up_to === undefined || bracket.up_to === '', 'Bậc cuối của biểu thuế phải không giới hạn mức thu nhập.');
+      } else {
+        assertValid(isValidNumber(bracket?.up_to, { min: 1, max: 1_000_000_000_000 }), `Mức thu nhập bậc ${index + 1} không hợp lệ.`);
+        assertValid(Number(bracket.up_to) > previousLimit, 'Các ngưỡng thu nhập trong biểu thuế phải tăng dần.');
+        previousLimit = Number(bracket.up_to);
+      }
+    }
+  }
 }
 
 function sanitizeSettings(body = {}, base = DEFAULT_SETTINGS) {

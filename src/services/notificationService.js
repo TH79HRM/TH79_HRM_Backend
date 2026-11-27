@@ -1,4 +1,4 @@
-import { Employees, EmployeeContracts, EmployeeChangeRequests } from '../models/raw.js';
+import { Employees, EmployeeContracts, EmployeeChangeRequests, LeaveRequests, AttendanceAdjustments } from '../models/raw.js';
 import { enrichEmployees } from './employeeService.js';
 import { getDigitalDocumentCoverage, getRequiredDocumentTypes } from './documentCoverageService.js';
 
@@ -32,7 +32,13 @@ export async function notificationFeed(limit = 30) {
       if (count) items.push({ type:'document', severity:count>=3?'warning':'info', employee_id:e.id, title:`${e.full_name} thiếu ${count} hồ sơ số bắt buộc`, detail:e.employee_code, href:`/employees/${e.id}` });
     }
   }
-  const pending = await EmployeeChangeRequests.countDocuments({ status:'pending' });
+  const [pending, pendingLeaves, pendingAdjustments] = await Promise.all([
+    EmployeeChangeRequests.countDocuments({ status:'pending' }),
+    LeaveRequests.countDocuments({ status:'pending' }),
+    AttendanceAdjustments.countDocuments({ status:'pending' })
+  ]);
+  if (pendingLeaves) items.unshift({ type:'approval', severity:'warning', title:`${pendingLeaves} đơn nghỉ phép / OT chờ duyệt`, detail:'Nghỉ phép & Tăng ca', href:'/self-service/requests' });
+  if (pendingAdjustments) items.unshift({ type:'approval', severity:'warning', title:`${pendingAdjustments} đơn giải trình công chờ duyệt`, detail:'Chấm công', href:'/self-service/requests' });
   if (pending) items.unshift({ type:'approval', severity:'info', title:`${pending} yêu cầu thay đổi thông tin chờ duyệt`, detail:'Employee Self-Service', href:'/self-service/requests' });
   const rank = {danger:0, warning:1, info:2};
   return items.sort((a,b)=>(rank[a.severity]??3)-(rank[b.severity]??3)).slice(0, limit);
