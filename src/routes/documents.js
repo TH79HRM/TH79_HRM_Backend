@@ -2,13 +2,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { EmployeeDocuments, EmployeeDocumentFiles, EmployeeDocumentReviews } from '../models/raw.js';
+import { EmployeeDocuments, EmployeeDocumentFiles, EmployeeDocumentReviews, DocumentTypes, Employees } from '../models/raw.js';
 import { can, anyPermission } from '../middleware/auth.js';
 import { nextId } from '../utils/id.js';
 import { idVariants } from '../utils/legacyId.js';
 import { hydrateLegacyId } from '../utils/legacySeedIdentity.js';
 import { audit } from '../services/auditService.js';
 import { env } from '../config/env.js';
+import { assertValid, isValidDate } from '../utils/validation.js';
 import {
   cloudinaryAssetFields,
   cloudinaryFolder,
@@ -36,9 +37,11 @@ router.post('/upload', can('document.upload'), upload.single('file'), async (req
   try {
     const employeeId = Number(req.body.employee_id);
     const typeId = Number(req.body.document_type_id);
-    if (!employeeId || !typeId || !req.file) {
-      return res.status(400).json({ message: 'Thiếu nhân viên, loại hồ sơ hoặc tệp PDF/ảnh.' });
-    }
+    assertValid(Number.isSafeInteger(employeeId)&&employeeId>0&&Number.isSafeInteger(typeId)&&typeId>0&&req.file, 'Thiếu nhân viên, loại hồ sơ hoặc tệp PDF/ảnh.');
+    assertValid(await Employees.findOne({id:{$in:idVariants(employeeId)}}).lean(), 'Không tìm thấy nhân viên.');
+    assertValid(await DocumentTypes.findOne({id:{$in:idVariants(typeId)},status:'active'}).lean(), 'Loại hồ sơ không hợp lệ.');
+    if(req.body.expiry_date)assertValid(isValidDate(String(req.body.expiry_date).slice(0,10)),'Ngày hết hạn hồ sơ không hợp lệ.');
+    if(req.body.note!==undefined)assertValid(String(req.body.note).length<=2000,'Ghi chú hồ sơ không được vượt quá 2.000 ký tự.');
 
     let rawDoc = await EmployeeDocuments.findOne({
       employee_id: { $in: idVariants(employeeId) },
@@ -153,8 +156,12 @@ router.get('/file/:id', anyPermission('document.view', 'employee.view'), async (
 
 router.post('/review', can('document.view'), async (req, res) => {
   const docId = Number(req.body.employee_document_id);
-  const status = String(req.body.status || 'pending');
-  await EmployeeDocuments.updateOne({ id: docId }, { $set: { verification_status: status, updated_at: new Date() } });
+  const status = String(req.body.status || '');
+  assertValid(Number.isSafeInteger(docId)&&docId>0,'Mã hồ sơ không hợp lệ.');
+  assertValid(['pending','verified','rejected','approved'].includes(status),'Trạng thái xác minh hồ sơ không hợp lệ.');
+  assertValid(await EmployeeDocuments.findOne({id:{$in:idVariants(docId)}}).lean(),'Không tìm thấy hồ sơ cần xác minh.');
+  if(req.body.note!==undefined)assertValid(typeof req.body.note==='string'&&req.body.note.length<=2000,'Ghi chú xác minh không được vượt quá 2.000 ký tự.');
+  await EmployeeDocuments.updateOne({ id: { $in: idVariants(docId) } }, { $set: { verification_status: status, updated_at: new Date() } });
   await EmployeeDocumentReviews.create({
     id: await nextId('employee_document_reviews'),
     employee_document_id: docId,

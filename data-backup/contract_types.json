@@ -1,0 +1,29 @@
+[
+  {
+    "_id": "6a910649262a2dc7e7075082",
+    "contract_type_code": "PROBATION",
+    "contract_type_name": "Hợp đồng thử việc",
+    "default_months": 2,
+    "description": "Dùng cho thời gian thử việc",
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a910649262a2dc7e7075083",
+    "contract_type_code": "FIXED_TERM",
+    "contract_type_name": "Hợp đồng lao động xác định thời hạn",
+    "default_months": 12,
+    "description": "Thời hạn tùy hợp đồng thực tế",
+    "status": "active",
+    "__v": 0
+  },
+  {
+    "_id": "6a910649262a2dc7e7075084",
+    "contract_type_code": "INDEFINITE",
+    "contract_type_name": "Hợp đồng lao động không xác định thời hạn",
+    "default_months": null,
+    "description": "Không xác định thời hạn",
+    "status": "active",
+    "__v": 0
+  }
+]

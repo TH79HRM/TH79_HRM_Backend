@@ -1,0 +1,20 @@
+[
+  {
+    "_id": "6a910649262a2dc7e707507e",
+    "status_code": "OFFICIAL",
+    "status_name": "Nhân viên chính thức",
+    "description": "Nhân sự đã/đang ở trạng thái ký hợp đồng chính thức",
+    "sort_order": 10,
+    "is_active": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a910649262a2dc7e707507f",
+    "status_code": "PROBATION",
+    "status_name": "Nhân viên thử việc",
+    "description": "Nhân sự đang trong thời gian thử việc",
+    "sort_order": 20,
+    "is_active": 1,
+    "__v": 0
+  }
+]

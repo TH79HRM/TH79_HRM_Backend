@@ -15,6 +15,8 @@ import { getByLegacyId, idVariants, mapByLegacyId } from '../utils/legacyId.js';
 import { hydrateLegacyId, hydrateLegacyIds } from '../utils/legacySeedIdentity.js';
 import { getDigitalDocumentCoverage, getRequiredDocumentTypes } from '../services/documentCoverageService.js';
 import { ensureOrganizationIds } from '../services/organizationService.js';
+import { hasPermission } from '../services/permissionService.js';
+import { assertValid, isValidDate, isValidEmail, isValidNumber, isValidPhone } from '../utils/validation.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -95,26 +97,62 @@ router.get('/import/template', can('employee.import'), async (req, res) => {
 
 router.post('/import/preview', can('employee.import'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'Chưa chọn file Excel.' });
-  const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+  let rows;
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+    const firstSheet = wb.Sheets[wb.SheetNames[0]];
+    if (!firstSheet) return res.status(400).json({ message: 'File không có trang tính dữ liệu.' });
+    rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+  } catch {
+    return res.status(400).json({ message: 'Không đọc được file Excel. Hãy tải file mẫu và thử lại.' });
+  }
+  rows = rows.filter(row => Object.values(row).some(value => String(value ?? '').trim() !== ''));
+  if (!rows.length) return res.status(400).json({ message: 'File không có dòng dữ liệu.' });
+  if (rows.length > 2000) return res.status(400).json({ message: 'Mỗi lần chỉ được import tối đa 2.000 dòng.' });
+  const [rawBranches, rawDepartments, rawPositions] = await Promise.all([
+    Branches.find({}).lean(), Departments.find({}).lean(), Positions.find({}).lean()
+  ]);
+  const branches = hydrateLegacyIds('branches', rawBranches);
+  const departments = hydrateLegacyIds('departments', rawDepartments);
+  const positions = hydrateLegacyIds('positions', rawPositions);
   const preview = [];
+  const seenCodes = new Set();
+  const seenIdentities = new Set();
   for (const [i, r] of rows.entries()) {
-    const code = String(r['Mã NV'] || r.employee_code || '').trim();
+    const code = String(r['Mã NV'] || r.employee_code || '').trim().toUpperCase();
     const name = String(r['Họ tên'] || r.full_name || '').trim();
-    const existing = code ? await Employees.findOne({ employee_code: code, deleted_at: null }).lean() : null;
-    const errors = [];
-    if (!name) errors.push('Thiếu họ tên');
+    const rawDob = r['Ngày sinh'] || r.date_of_birth;
+    const rawJoinDate = r['Ngày nhận việc'] || r.join_date;
+    const existing = code ? await Employees.findOne({ employee_code: new RegExp(`^${escapeRegex(code)}$`, 'i'), deleted_at: null }).lean() : null;
+    const data = {
+      employee_code: code, full_name: name, gender: r['Giới tính'] || 'unknown',
+      date_of_birth: toDate(rawDob), phone: String(r['Điện thoại'] || '').trim(),
+      email: String(r['Email'] || '').trim().toLowerCase(), identity_number: String(r['CCCD'] || '').replace(/\s/g, ''),
+      join_date: toDate(rawJoinDate), employment_status: r['Trạng thái'] || 'probation',
+      branch_name: r['Chi nhánh'] || '', department_name: r['Phòng ban'] || '', position_name: r['Chức vụ'] || ''
+    };
+    const errors = collectEmployeeImportErrors(data);
+    if (data.branch_name && !findName(branches, 'branch_name', data.branch_name)) errors.push('Chi nhánh không tồn tại');
+    if (data.department_name && !findName(departments, 'department_name', data.department_name)) errors.push('Phòng ban không tồn tại');
+    if (data.position_name && !findName(positions, 'position_name', data.position_name)) errors.push('Chức vụ không tồn tại');
+    if (rawDob && !data.date_of_birth) errors.push('Ngày sinh không hợp lệ');
+    if (rawJoinDate && !data.join_date) errors.push('Ngày nhận việc không hợp lệ');
+    const normalizedCode = data.employee_code.toLowerCase();
+    const normalizedIdentity = data.identity_number.replace(/\s/g, '');
+    if (normalizedCode && seenCodes.has(normalizedCode)) errors.push('Mã nhân viên bị lặp trong file');
+    if (normalizedIdentity && seenIdentities.has(normalizedIdentity)) errors.push('CCCD bị lặp trong file');
+    if (normalizedCode) seenCodes.add(normalizedCode);
+    if (normalizedIdentity) seenIdentities.add(normalizedIdentity);
+    if (normalizedIdentity) {
+      const filter = { identity_number: normalizedIdentity, deleted_at: null };
+      if (existing) filter._id = { $ne: existing._id };
+      if (await Employees.findOne(filter).lean()) errors.push('CCCD đã tồn tại trong hệ thống');
+    }
     preview.push({
       row: i + 2,
       action: existing ? 'update' : 'create',
       employee_id: existing ? hydrateLegacyId('employees', existing).id : null,
-      data: {
-        employee_code: code, full_name: name, gender: r['Giới tính'] || 'unknown',
-        date_of_birth: toDate(r['Ngày sinh']), phone: String(r['Điện thoại'] || ''),
-        email: String(r['Email'] || ''), identity_number: String(r['CCCD'] || ''),
-        join_date: toDate(r['Ngày nhận việc']), employment_status: r['Trạng thái'] || 'probation',
-        branch_name: r['Chi nhánh'] || '', department_name: r['Phòng ban'] || '', position_name: r['Chức vụ'] || ''
-      },
+      data,
       errors
     });
   }
@@ -126,25 +164,51 @@ router.post('/import/preview', can('employee.import'), upload.single('file'), as
 
 router.post('/import/confirm', can('employee.import'), async (req, res) => {
   const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  assertValid(rows.length > 0 && rows.length <= 2000, 'Chọn từ 1 đến 2.000 dòng để import.');
+  assertValid(rows.every(row => row && typeof row === 'object'), 'Danh sách dòng import không hợp lệ.');
   const [rawBranches, rawDepartments, rawPositions] = await Promise.all([
     Branches.find({}).lean(), Departments.find({}).lean(), Positions.find({}).lean()
   ]);
   const branches = hydrateLegacyIds('branches', rawBranches);
   const departments = hydrateLegacyIds('departments', rawDepartments);
   const positions = hydrateLegacyIds('positions', rawPositions);
-  let created = 0, updated = 0;
+  const prepared = [];
+  const acceptedCodes = new Set();
+  const acceptedIdentities = new Set();
   for (const r of rows.filter(x => !x.errors?.length)) {
+    assertValid(r && r.data && typeof r.data === 'object', `Dòng ${r?.row || '?'} không có dữ liệu hợp lệ.`);
     const d = { ...r.data };
+    if (typeof d.employee_code === 'string') d.employee_code = d.employee_code.trim().toUpperCase();
+    if (typeof d.email === 'string') d.email = d.email.trim().toLowerCase();
+    if (typeof d.identity_number === 'string') d.identity_number = d.identity_number.replace(/\s/g, '');
     d.branch_id = findName(branches, 'branch_name', d.branch_name);
     d.department_id = findName(departments, 'department_name', d.department_name);
     d.position_id = findName(positions, 'position_name', d.position_name);
+    assertValid(!d.branch_name || d.branch_id, `Dòng ${r.row || '?'}: chi nhánh không tồn tại.`);
+    assertValid(!d.department_name || d.department_id, `Dòng ${r.row || '?'}: phòng ban không tồn tại.`);
+    assertValid(!d.position_name || d.position_id, `Dòng ${r.row || '?'}: chức vụ không tồn tại.`);
     delete d.branch_name; delete d.department_name; delete d.position_name;
-    if (r.employee_id) {
-      const target = await employeeById(r.employee_id);
-      if (target?._id) {
-        await Employees.updateOne({ _id: target._id }, { $set: { ...d, updated_at: new Date() } });
-        updated++;
-      }
+    const targetByCode = d.employee_code
+      ? await Employees.findOne({ employee_code: new RegExp(`^${escapeRegex(String(d.employee_code).trim())}$`, 'i'), deleted_at: null }).lean()
+      : null;
+    const target = targetByCode;
+    const rowErrors = collectEmployeeImportErrors(d);
+    assertValid(!rowErrors.length, `Dòng ${r.row || '?'}: ${rowErrors.join('; ')}.`);
+    await validateEmployeePayload(d, target?._id || null);
+    const code = String(d.employee_code || '').trim().toLowerCase();
+    const identity = String(d.identity_number || '').replace(/\s/g, '');
+    assertValid(!code || !acceptedCodes.has(code), `Dòng ${r.row || '?'}: mã nhân viên bị lặp trong file.`);
+    assertValid(!identity || !acceptedIdentities.has(identity), `Dòng ${r.row || '?'}: CCCD bị lặp trong file.`);
+    if (code) acceptedCodes.add(code);
+    if (identity) acceptedIdentities.add(identity);
+    prepared.push({ d, target, row: r.row });
+  }
+  assertValid(prepared.length > 0, 'Không có dòng hợp lệ để import.');
+  let created = 0, updated = 0;
+  for (const {d,target} of prepared) {
+    if (target?._id) {
+      await Employees.updateOne({ _id: target._id }, { $set: { ...d, updated_at: new Date() } });
+      updated++;
     } else {
       d.id = await nextId('employees');
       d.company_id = 1;
@@ -273,12 +337,14 @@ router.get('/:id', can('employee.view'), async (req, res) => {
 });
 
 router.post('/', can('employee.create'), async (req, res) => {
+  await validateEmployeePayload(req.body);
   const id = await nextId('employees');
   const d = sanitizeEmployee(req.body);
   d.id = id; d.company_id = 1;
   d.employee_code = d.employee_code || `TH79-NV${String(id).padStart(4, '0')}`;
   d.created_at = new Date(); d.updated_at = new Date(); d.deleted_at = null;
   await Employees.create(d);
+  if (hasPermission(req.auth, 'payroll.manage')) await upsertSalaryProfile(id, req.body);
   await EmployeeStatusHistory.create({ id: await nextId('employee_status_history'), employee_id: id, old_status: null, new_status: d.employment_status || 'active', effective_date: new Date().toISOString().slice(0, 10), reason: 'Tạo hồ sơ' });
   await audit(req, { module: 'employees', action: 'create', recordType: 'employee', recordId: id, employeeId: id, description: `Tạo hồ sơ nhân viên: ${d.full_name}`, newValues: d });
   res.status(201).json({ id });
@@ -287,8 +353,10 @@ router.post('/', can('employee.create'), async (req, res) => {
 router.put('/:id', can('employee.update'), async (req, res) => {
   const old = await employeeById(req.params.id);
   if (!old) return res.status(404).json({ message: 'Không tìm thấy nhân viên.' });
+  await validateEmployeePayload(req.body, old._id);
   const d = sanitizeEmployee(req.body);
   await Employees.updateOne({ _id: old._id }, { $set: { ...d, updated_at: new Date() } });
+  if (hasPermission(req.auth, 'payroll.manage')) await upsertSalaryProfile(Number(old.id), req.body);
   if (d.employment_status && d.employment_status !== old.employment_status) {
     await EmployeeStatusHistory.create({ id: await nextId('employee_status_history'), employee_id: Number(old.id), old_status: old.employment_status, new_status: d.employment_status, effective_date: new Date().toISOString().slice(0, 10), reason: 'Cập nhật hồ sơ' });
   }
@@ -296,23 +364,62 @@ router.put('/:id', can('employee.update'), async (req, res) => {
   res.json({ ok: true, id: old.id });
 });
 
+// Xóa hàng loạt là xóa mềm: dữ liệu hồ sơ, hợp đồng, file Cloudinary và lịch sử
+// vẫn được giữ để có thể phục hồi/đối soát khi cần.
+router.post('/bulk-delete', can('employee.delete'), async (req, res) => {
+  const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map(String).filter(Boolean))];
+  if (!ids.length) return res.status(400).json({ message: 'Chưa chọn nhân viên cần xóa.' });
+  if (ids.length > 500) return res.status(400).json({ message: 'Mỗi lần chỉ được xóa tối đa 500 nhân viên.' });
+
+  const mongoIds = [];
+  const deleted = [];
+  for (const id of ids) {
+    const e = await employeeById(id);
+    if (!e?._id) continue;
+    mongoIds.push(e._id);
+    deleted.push({ id: e.id, full_name: e.full_name, employee_code: e.employee_code });
+  }
+  if (!mongoIds.length) return res.status(404).json({ message: 'Không tìm thấy nhân viên hợp lệ để xóa.' });
+
+  const now = new Date();
+  await Employees.updateMany({ _id: { $in: mongoIds } }, { $set: { deleted_at: now, employment_status: 'inactive', updated_at: now } });
+  await audit(req, { module: 'employees', action: 'bulk_delete', recordType: 'employee', description: `Xóa mềm hàng loạt ${deleted.length} nhân viên`, newValues: { employees: deleted } });
+  res.json({ ok: true, deleted: deleted.length, message: `Đã xóa mềm ${deleted.length} nhân viên.` });
+});
+
+router.post('/delete-all', can('employee.delete'), async (req, res) => {
+  if (!req.auth?.isSuperAdmin) return res.status(403).json({ message: 'Chỉ Super Admin được phép xóa toàn bộ nhân sự.' });
+  const confirmation = String(req.body.confirmation || '').trim().toUpperCase();
+  if (confirmation !== 'XOA TAT CA NHAN SU') {
+    return res.status(400).json({ message: 'Xác nhận không đúng. Hãy nhập chính xác: XOA TAT CA NHAN SU' });
+  }
+  const filter = { $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] };
+  const count = await Employees.countDocuments(filter);
+  if (!count) return res.json({ ok: true, deleted: 0, message: 'Không còn nhân viên đang hoạt động để xóa.' });
+  const now = new Date();
+  await Employees.updateMany(filter, { $set: { deleted_at: now, employment_status: 'inactive', updated_at: now } });
+  await audit(req, { module: 'employees', action: 'delete_all', recordType: 'employee', description: `Xóa mềm toàn bộ ${count} nhân viên`, newValues: { count } });
+  res.json({ ok: true, deleted: count, message: `Đã xóa mềm toàn bộ ${count} nhân viên.` });
+});
+
 router.delete('/:id', can('employee.delete'), async (req, res) => {
   const e = await employeeById(req.params.id);
   if (!e) return res.status(404).json({ message: 'Không tìm thấy nhân viên.' });
   await Employees.updateOne({ _id: e._id }, { $set: { deleted_at: new Date(), employment_status: 'inactive', updated_at: new Date() } });
   await audit(req, { module: 'employees', action: 'delete', recordType: 'employee', recordId: e.id, employeeId: e.id, description: `Xóa mềm hồ sơ: ${e.full_name}` });
-  res.json({ ok: true });
+  res.json({ ok: true, message: `Đã xóa mềm hồ sơ ${e.full_name}.` });
 });
 
 function toDate(v) {
   if (!v) return null;
-  if (v instanceof Date) return v;
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
   if (typeof v === 'number') {
     const p = XLSX.SSF.parse_date_code(v);
-    return p ? new Date(Date.UTC(p.y, p.m - 1, p.d)) : null;
+    return p ? `${String(p.y).padStart(4, '0')}-${String(p.m).padStart(2, '0')}-${String(p.d).padStart(2, '0')}` : null;
   }
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return isValidDate(v) ? v : null;
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
 function findName(rows, key, value) {
@@ -335,12 +442,178 @@ function sanitizeEmployee(b) {
     'branch_id','department_id','position_id','contract_status_id','employee_code','full_name','gender',
     'date_of_birth','professional_qualification','identity_number','permanent_address','current_address','phone','email',
     'social_insurance_number','social_insurance_status','social_insurance_raw','join_date','probation_end_date',
-    'recruitment_decision_no','employment_status','note'
+    'recruitment_decision_no','employment_status','bank_account_number','bank_name','tax_dependents','note'
   ];
   const o = {};
   for (const k of keys) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k];
+  for (const k of [
+    'employee_code','full_name','professional_qualification','identity_number','permanent_address','current_address',
+    'phone','email','social_insurance_number','social_insurance_raw','recruitment_decision_no',
+    'bank_account_number','bank_name','note'
+  ]) {
+    if (typeof o[k] === 'string') o[k] = o[k].trim();
+  }
+  if (typeof o.employee_code === 'string') o.employee_code = o.employee_code.toUpperCase();
+  if (typeof o.email === 'string') o.email = o.email.toLowerCase();
+  for (const k of ['identity_number','social_insurance_number','bank_account_number']) {
+    if (typeof o[k] === 'string') o[k] = o[k].replace(/\s/g, '');
+  }
   for (const k of ['branch_id','department_id','position_id','contract_status_id']) o[k] = o[k] ? Number(o[k]) : null;
+  if (Object.prototype.hasOwnProperty.call(o, 'tax_dependents')) o.tax_dependents = Math.max(0, Math.floor(Number(o.tax_dependents) || 0));
   return o;
+}
+
+function collectEmployeeImportErrors(data) {
+  const errors = [];
+  const name = String(data.full_name || '').trim();
+  if (name.length < 2 || name.length > 120) errors.push('Họ tên phải có từ 2 đến 120 ký tự');
+  if (data.employee_code && !/^[A-Za-z0-9._-]{2,30}$/.test(String(data.employee_code).trim())) errors.push('Mã nhân viên không đúng định dạng');
+  if (data.email && !isValidEmail(String(data.email).trim())) errors.push('Email không đúng định dạng');
+  if (data.phone && !isValidPhone(String(data.phone).trim())) errors.push('Số điện thoại không đúng định dạng');
+  const identity = String(data.identity_number || '').replace(/\s/g, '');
+  if (identity && !/^(?:\d{9}|\d{12})$/.test(identity)) errors.push('CCCD phải gồm 9 hoặc 12 chữ số');
+  if (data.date_of_birth && (!isValidDate(String(data.date_of_birth).slice(0, 10)) || String(data.date_of_birth).slice(0, 10) >= new Date().toISOString().slice(0, 10))) errors.push('Ngày sinh không hợp lệ');
+  if (data.join_date && !isValidDate(String(data.join_date).slice(0, 10))) errors.push('Ngày nhận việc không hợp lệ');
+  if (data.probation_end_date && !isValidDate(String(data.probation_end_date).slice(0, 10))) errors.push('Ngày kết thúc thử việc không hợp lệ');
+  if (data.join_date && data.probation_end_date && String(data.probation_end_date).slice(0, 10) < String(data.join_date).slice(0, 10)) errors.push('Ngày thử việc phải sau hoặc bằng ngày nhận việc');
+  if (data.gender && !['unknown', 'male', 'female', 'other'].includes(data.gender)) errors.push('Giới tính không hợp lệ');
+  if (data.employment_status && !['probation', 'active', 'on_leave', 'resigned', 'inactive', 'terminated'].includes(data.employment_status)) errors.push('Trạng thái nhân viên không hợp lệ');
+  return errors;
+}
+
+async function validateEmployeePayload(body = {}, exceptMongoId = null) {
+  const required = ['full_name'];
+  for (const key of required) {
+    if (Object.prototype.hasOwnProperty.call(body, key) || !exceptMongoId) {
+      assertValid(typeof body[key] === 'string' && body[key].trim().length >= 2 && body[key].trim().length <= 120,
+        'Họ và tên phải có từ 2 đến 120 ký tự.');
+    }
+  }
+
+  if (body.employee_code !== undefined && String(body.employee_code).trim()) {
+    const code = String(body.employee_code).trim();
+    assertValid(/^[A-Za-z0-9._-]{2,30}$/.test(code), 'Mã nhân viên chỉ được dùng chữ, số, dấu chấm, gạch ngang hoặc gạch dưới (2–30 ký tự).');
+    const filter = { employee_code: new RegExp(`^${escapeRegex(code)}$`, 'i'), deleted_at: null };
+    if (exceptMongoId) filter._id = { $ne: exceptMongoId };
+    assertValid(!(await Employees.findOne(filter).lean()), 'Mã nhân viên đã tồn tại.', 409);
+  }
+
+  for (const [key, label] of [['email', 'Email'], ['phone', 'Số điện thoại']]) {
+    const value = String(body[key] || '').trim();
+    if (!value) continue;
+    assertValid(key === 'email' ? isValidEmail(value) : isValidPhone(value), `${label} không đúng định dạng.`);
+  }
+  for (const [key, label, max] of [
+    ['professional_qualification', 'Trình độ chuyên môn', 160],
+    ['permanent_address', 'Địa chỉ thường trú', 500],
+    ['current_address', 'Địa chỉ hiện tại', 500],
+    ['recruitment_decision_no', 'Số quyết định tuyển dụng', 100],
+    ['bank_name', 'Tên ngân hàng', 120],
+    ['note', 'Ghi chú', 2000]
+  ]) {
+    if (body[key] !== undefined && body[key] !== null) {
+      assertValid(typeof body[key] === 'string' && body[key].length <= max, `${label} không được vượt quá ${max} ký tự.`);
+    }
+  }
+
+  const identity = String(body.identity_number || '').replace(/\s/g, '');
+  if (identity) {
+    assertValid(/^(?:\d{9}|\d{12})$/.test(identity), 'CMND/CCCD phải gồm 9 hoặc 12 chữ số.');
+    const filter = { identity_number: identity, deleted_at: null };
+    if (exceptMongoId) filter._id = { $ne: exceptMongoId };
+    assertValid(!(await Employees.findOne(filter).lean()), 'Số CMND/CCCD đã được sử dụng.', 409);
+  }
+
+  for (const [key, label] of [
+    ['date_of_birth', 'Ngày sinh'], ['join_date', 'Ngày nhận việc'],
+    ['probation_end_date', 'Ngày kết thúc thử việc'], ['salary_effective_from', 'Ngày hiệu lực lương']
+  ]) {
+    const value = body[key];
+    if (value) assertValid(isValidDate(String(value).slice(0, 10)), `${label} không hợp lệ.`);
+  }
+  if (body.date_of_birth) {
+    assertValid(String(body.date_of_birth).slice(0, 10) < new Date().toISOString().slice(0, 10), 'Ngày sinh phải nằm trong quá khứ.');
+  }
+  if (body.join_date && body.probation_end_date) {
+    assertValid(String(body.probation_end_date).slice(0, 10) >= String(body.join_date).slice(0, 10),
+      'Ngày kết thúc thử việc phải sau hoặc bằng ngày nhận việc.');
+  }
+
+  const enums = {
+    gender: ['unknown', 'male', 'female', 'other'],
+    employment_status: ['probation', 'active', 'on_leave', 'resigned', 'inactive', 'terminated'],
+    social_insurance_status: ['unknown', 'has_number', 'not_yet', 'external_company']
+  };
+  for (const [key, values] of Object.entries(enums)) {
+    if (body[key] !== undefined) assertValid(values.includes(body[key]), `Giá trị ${key} không hợp lệ.`);
+  }
+
+  for (const [key, Model, label] of [
+    ['branch_id', Branches, 'Chi nhánh'],
+    ['department_id', Departments, 'Phòng ban'],
+    ['position_id', Positions, 'Chức vụ'],
+    ['contract_status_id', ContractStatuses, 'Trạng thái hợp đồng']
+  ]) {
+    const value = body[key];
+    if (value === undefined || value === null || value === '') continue;
+    assertValid(isValidNumber(value, { min: 1, integer: true }), `${label} không hợp lệ.`);
+    assertValid(await Model.findOne({ id: { $in: idVariants(value) } }).lean(), `Không tìm thấy ${label.toLowerCase()}.`);
+  }
+
+  for (const key of [
+    'base_salary', 'probation_salary', 'insurance_salary', 'lunch_allowance', 'fuel_allowance',
+    'phone_allowance', 'attendance_allowance', 'other_allowance'
+  ]) {
+    if (body[key] !== undefined && body[key] !== '') {
+      assertValid(isValidNumber(body[key], { min: 0, max: 1_000_000_000_000 }), `${key} phải là số không âm hợp lệ.`);
+    }
+  }
+  if (body.tax_dependents !== undefined && body.tax_dependents !== '') {
+    assertValid(isValidNumber(body.tax_dependents, { min: 0, max: 100, integer: true }), 'Số người phụ thuộc phải là số nguyên từ 0 đến 100.');
+  }
+  if (body.bank_account_number) {
+    assertValid(/^[0-9]{5,30}$/.test(String(body.bank_account_number).replace(/\s/g, '')), 'Số tài khoản ngân hàng phải gồm 5–30 chữ số.');
+  }
+  if (body.social_insurance_number) {
+    assertValid(/^\d{10}$/.test(String(body.social_insurance_number).replace(/\s/g, '')), 'Số BHXH phải gồm 10 chữ số.');
+  }
+}
+
+
+function salaryNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+async function upsertSalaryProfile(employeeId, body = {}) {
+  const salaryKeys = [
+    'base_salary','probation_salary','insurance_salary','lunch_allowance','fuel_allowance',
+    'phone_allowance','attendance_allowance','other_allowance','salary_effective_from'
+  ];
+  if (!salaryKeys.some(k => Object.prototype.hasOwnProperty.call(body, k))) return;
+
+  const payload = {
+    base_salary: salaryNumber(body.base_salary),
+    probation_salary: salaryNumber(body.probation_salary),
+    insurance_salary: salaryNumber(body.insurance_salary || body.base_salary),
+    lunch_allowance: salaryNumber(body.lunch_allowance),
+    fuel_allowance: salaryNumber(body.fuel_allowance),
+    phone_allowance: salaryNumber(body.phone_allowance),
+    attendance_allowance: salaryNumber(body.attendance_allowance),
+    other_allowance: salaryNumber(body.other_allowance),
+    effective_from: body.salary_effective_from || body.join_date || new Date().toISOString().slice(0, 10),
+    updated_at: new Date()
+  };
+
+  const existing = await SalaryProfiles.findOne({ employee_id: { $in: idVariants(employeeId) } }).sort({ effective_from: -1, id: -1 });
+  if (existing) {
+    await SalaryProfiles.updateOne({ _id: existing._id }, { $set: payload });
+  } else {
+    await SalaryProfiles.create({
+      id: await nextId('salary_profiles'), company_id: 1, employee_id: Number(employeeId),
+      ...payload, created_at: new Date()
+    });
+  }
 }
 
 export default router;

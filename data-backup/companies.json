@@ -1,0 +1,16 @@
+[
+  {
+    "_id": "6a910649262a2dc7e707507b",
+    "company_code": "TH79",
+    "company_name": "CÔNG TY TNHH ĐẦU TƯ T&H 79",
+    "tax_code": "0319573421",
+    "representative_name": null,
+    "phone": null,
+    "email": null,
+    "address": "33 Đường Số A8 Khu Dân Cư Vĩnh Lộc phường Bình Tân, Tp.HCM",
+    "status": "active",
+    "created_at": "2026-08-11 07:29:08",
+    "updated_at": "2026-08-11 07:29:08",
+    "__v": 0
+  }
+]

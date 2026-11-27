@@ -22,6 +22,8 @@ import assistantRoutes from './routes/assistant.js';
 import selfServiceRoutes from './routes/selfService.js';
 import profileRoutes from './routes/profile.js';
 import storageRoutes from './routes/storage.js';
+import attendanceRoutes from './routes/attendance.js';
+import leaveRoutes from './routes/leave.js';
 import { notFound, errorHandler } from './middleware/error.js';
 
 const app = express();
@@ -62,7 +64,12 @@ app.get('/api/health', (req, res) => res.json({
 }));
 
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 120 }), authRoutes);
-app.use('/api', requireAuth);
+app.use('/api', requireAuth, (req, res, next) => {
+  if (req.auth?.user?.must_change_password) {
+    return res.status(403).json({ message: 'Hãy đổi mật khẩu trước khi tiếp tục sử dụng hệ thống.' });
+  }
+  next();
+});
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/documents', documentRoutes);
@@ -77,6 +84,8 @@ app.use('/api/assistant', assistantRoutes);
 app.use('/api/self-service', selfServiceRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/storage', storageRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/leave', leaveRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

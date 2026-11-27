@@ -10,7 +10,8 @@ export async function requireAuth(req, res, next) {
     const payload = jwt.verify(token, env.jwtSecret);
     const snapshot = await permissionSnapshot(payload.uid);
     const isActive = ['active', '1', 1, true].includes(snapshot?.user?.status) || snapshot?.user?.status === undefined || snapshot?.user?.status === null;
-    if (!snapshot?.user || !isActive) {
+    const authVersion = Number(snapshot?.user?.auth_version || 0);
+    if (!snapshot?.user || !isActive || Number(payload.authVersion || 0) !== authVersion) {
       return res.status(401).json({ message: 'Tài khoản không còn hoạt động hoặc dữ liệu tài khoản chưa hoàn chỉnh.' });
     }
 

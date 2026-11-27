@@ -1,0 +1,392 @@
+[
+  {
+    "_id": "6a91064a262a2dc7e70754a8",
+    "role_id": 1,
+    "permission_id": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754a9",
+    "role_id": 2,
+    "permission_id": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754aa",
+    "role_id": 3,
+    "permission_id": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ab",
+    "role_id": 7,
+    "permission_id": 1,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ac",
+    "role_id": 1,
+    "permission_id": 2,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ad",
+    "role_id": 2,
+    "permission_id": 2,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ae",
+    "role_id": 1,
+    "permission_id": 3,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754af",
+    "role_id": 2,
+    "permission_id": 3,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b0",
+    "role_id": 1,
+    "permission_id": 4,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b1",
+    "role_id": 2,
+    "permission_id": 4,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b2",
+    "role_id": 1,
+    "permission_id": 5,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b3",
+    "role_id": 2,
+    "permission_id": 5,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b4",
+    "role_id": 3,
+    "permission_id": 5,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b5",
+    "role_id": 7,
+    "permission_id": 5,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b6",
+    "role_id": 1,
+    "permission_id": 6,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b7",
+    "role_id": 2,
+    "permission_id": 6,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b8",
+    "role_id": 1,
+    "permission_id": 7,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754b9",
+    "role_id": 2,
+    "permission_id": 7,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ba",
+    "role_id": 3,
+    "permission_id": 7,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754bb",
+    "role_id": 8,
+    "permission_id": 7,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754bc",
+    "role_id": 1,
+    "permission_id": 8,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754bd",
+    "role_id": 2,
+    "permission_id": 8,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754be",
+    "role_id": 1,
+    "permission_id": 9,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754bf",
+    "role_id": 1,
+    "permission_id": 10,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c0",
+    "role_id": 1,
+    "permission_id": 11,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c1",
+    "role_id": 2,
+    "permission_id": 11,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c2",
+    "role_id": 6,
+    "permission_id": 11,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c3",
+    "role_id": 1,
+    "permission_id": 12,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c4",
+    "role_id": 2,
+    "permission_id": 12,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c5",
+    "role_id": 1,
+    "permission_id": 13,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c6",
+    "role_id": 2,
+    "permission_id": 13,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c7",
+    "role_id": 1,
+    "permission_id": 14,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c8",
+    "role_id": 2,
+    "permission_id": 14,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754c9",
+    "role_id": 1,
+    "permission_id": 15,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ca",
+    "role_id": 1,
+    "permission_id": 16,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754cb",
+    "role_id": 2,
+    "permission_id": 16,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754cc",
+    "role_id": 1,
+    "permission_id": 17,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754cd",
+    "role_id": 2,
+    "permission_id": 17,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754ce",
+    "role_id": 1,
+    "permission_id": 18,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754cf",
+    "role_id": 1,
+    "permission_id": 19,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d0",
+    "role_id": 2,
+    "permission_id": 19,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d1",
+    "role_id": 3,
+    "permission_id": 19,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d2",
+    "role_id": 9,
+    "permission_id": 19,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d3",
+    "role_id": 1,
+    "permission_id": 20,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d4",
+    "role_id": 2,
+    "permission_id": 20,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d5",
+    "role_id": 7,
+    "permission_id": 20,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d6",
+    "role_id": 1,
+    "permission_id": 21,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d7",
+    "role_id": 2,
+    "permission_id": 21,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d8",
+    "role_id": 1,
+    "permission_id": 22,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754d9",
+    "role_id": 2,
+    "permission_id": 22,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754da",
+    "role_id": 3,
+    "permission_id": 22,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754db",
+    "role_id": 1,
+    "permission_id": 23,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754dc",
+    "role_id": 2,
+    "permission_id": 23,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754dd",
+    "role_id": 3,
+    "permission_id": 23,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754de",
+    "role_id": 1,
+    "permission_id": 24,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754df",
+    "role_id": 2,
+    "permission_id": 24,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e0",
+    "role_id": 3,
+    "permission_id": 24,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e1",
+    "role_id": 1,
+    "permission_id": 25,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e2",
+    "role_id": 2,
+    "permission_id": 25,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e3",
+    "role_id": 3,
+    "permission_id": 25,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e4",
+    "role_id": 1,
+    "permission_id": 26,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e5",
+    "role_id": 1,
+    "permission_id": 27,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e6",
+    "role_id": 1,
+    "permission_id": 28,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e7",
+    "role_id": 1,
+    "permission_id": 29,
+    "__v": 0
+  },
+  {
+    "_id": "6a91064a262a2dc7e70754e8",
+    "role_id": 1,
+    "permission_id": 30,
+    "__v": 0
+  }
+]

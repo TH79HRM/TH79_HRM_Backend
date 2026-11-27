@@ -8,6 +8,7 @@ import { nextId } from '../utils/id.js';
 import { audit } from '../services/auditService.js';
 import { env } from '../config/env.js';
 import { enrichEmployees } from '../services/employeeService.js';
+import { assertValid, isValidDate, isValidNumber } from '../utils/validation.js';
 import {
   cloudinaryAssetFields,
   cloudinaryFolder,
@@ -37,13 +38,41 @@ router.get('/', can('contract.view'), async (req, res) => {
 });
 
 router.post('/', can('contract.manage'), async (req, res) => {
+  const employeeId = Number(req.body.employee_id);
+  const contractTypeId = Number(req.body.contract_type_id);
+  assertValid(Number.isSafeInteger(employeeId) && employeeId > 0, 'Vui lòng chọn nhân viên hợp lệ.');
+  assertValid(Number.isSafeInteger(contractTypeId) && contractTypeId > 0, 'Vui lòng chọn loại hợp đồng hợp lệ.');
+  assertValid(await Employees.findOne({ id: employeeId }).lean(), 'Không tìm thấy nhân viên.');
+  assertValid(await ContractTypes.findOne({ id: contractTypeId, status: 'active' }).lean(), 'Loại hợp đồng không hợp lệ.');
+  assertValid(isValidDate(req.body.start_date), 'Ngày bắt đầu hợp đồng không hợp lệ.');
+  if (req.body.end_date) {
+    assertValid(isValidDate(req.body.end_date), 'Ngày kết thúc hợp đồng không hợp lệ.');
+    assertValid(req.body.end_date >= req.body.start_date, 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.');
+  }
+  if (req.body.signed_date) {
+    assertValid(isValidDate(req.body.signed_date), 'Ngày ký hợp đồng không hợp lệ.');
+    assertValid(!req.body.end_date || req.body.signed_date <= req.body.end_date, 'Ngày ký không thể sau ngày kết thúc hợp đồng.');
+  }
+  for (const [field, label] of [['base_salary', 'Lương cơ bản'], ['allowance_amount', 'Phụ cấp']]) {
+    if (req.body[field] !== undefined && req.body[field] !== '') {
+      assertValid(isValidNumber(req.body[field], { min: 0, max: 1_000_000_000_000 }), `${label} phải là số không âm hợp lệ.`);
+    }
+  }
+  assertValid(['draft', 'active', 'expired', 'terminated', 'cancelled'].includes(req.body.status || 'active'), 'Trạng thái hợp đồng không hợp lệ.');
+  const contractNo = String(req.body.contract_no || '').trim();
+  if (contractNo) {
+    assertValid(contractNo.length <= 100, 'Số hợp đồng không được vượt quá 100 ký tự.');
+    assertValid(!(await EmployeeContracts.findOne({ contract_no: contractNo }).lean()), 'Số hợp đồng đã tồn tại.', 409);
+  }
+  if (req.body.note !== undefined) assertValid(typeof req.body.note === 'string' && req.body.note.length <= 2000, 'Ghi chú hợp đồng không được vượt quá 2.000 ký tự.');
+
   const id = await nextId('employee_contracts');
   const row = {
     id,
     company_id: 1,
     employee_id: Number(req.body.employee_id),
     contract_type_id: Number(req.body.contract_type_id),
-    contract_no: req.body.contract_no || null,
+    contract_no: contractNo || null,
     start_date: req.body.start_date || null,
     end_date: req.body.end_date || null,
     signed_date: req.body.signed_date || null,

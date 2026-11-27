@@ -1,7 +1,31 @@
-import { Router } from 'express';import { Employees, EmployeeChangeRequests, EmployeeContracts, EmployeeDocuments, DocumentTypes } from '../models/raw.js';import { nextId } from '../utils/id.js';import { audit } from '../services/auditService.js';import { can } from '../middleware/auth.js';import { employeeById } from '../services/employeeService.js';
+import { Router } from 'express';import { Employees, EmployeeChangeRequests, EmployeeContracts, EmployeeDocuments, DocumentTypes } from '../models/raw.js';import { nextId } from '../utils/id.js';import { audit } from '../services/auditService.js';import { can } from '../middleware/auth.js';import { employeeById } from '../services/employeeService.js';import { assertValid, isValidEmail, isValidPhone } from '../utils/validation.js';
 const router=Router();
 router.get('/me',async(req,res)=>{const id=Number(req.auth.user.employee_id||0);if(!id)return res.status(404).json({message:'Tài khoản chưa liên kết hồ sơ nhân viên.'});const employee=await employeeById(id),requests=await EmployeeChangeRequests.find({employee_id:id}).sort({id:-1}).lean(),contracts=await EmployeeContracts.find({employee_id:id}).sort({id:-1}).lean(),documents=await EmployeeDocuments.find({employee_id:id}).lean(),types=await DocumentTypes.find({}).lean();res.json({employee,requests,contracts,documents,documentTypes:types});});
-router.post('/requests',async(req,res)=>{const employeeId=Number(req.auth.user.employee_id||0);if(!employeeId)return res.status(400).json({message:'Tài khoản chưa liên kết nhân viên.'});const allowed=['phone','email','current_address','permanent_address','professional_qualification'];if(!allowed.includes(req.body.field_name))return res.status(400).json({message:'Trường dữ liệu không hỗ trợ yêu cầu tự cập nhật.'});const employee=await Employees.findOne({id:employeeId}).lean(),id=await nextId('employee_change_requests');await EmployeeChangeRequests.create({id,employee_id:employeeId,user_id:req.auth.user.id,field_code:req.body.field_name,old_value:employee?.[req.body.field_name]??null,new_value:req.body.new_value||'',request_note:req.body.reason||null,status:'pending',reviewed_by:null,reviewed_at:null,review_note:null,created_at:new Date(),updated_at:new Date()});await audit(req,{module:'self_service',action:'request',recordType:'employee_change_request',recordId:id,employeeId,description:`Yêu cầu cập nhật ${req.body.field_name}`});res.status(201).json({id});});
+router.post('/requests',async(req,res)=>{
+  const employeeId=Number(req.auth.user.employee_id||0);
+  assertValid(Number.isSafeInteger(employeeId)&&employeeId>0,'Tài khoản chưa liên kết nhân viên.');
+  const allowed=['phone','email','current_address','permanent_address','professional_qualification'];
+  assertValid(allowed.includes(req.body.field_name),'Trường dữ liệu không hỗ trợ yêu cầu tự cập nhật.');
+  const value=String(req.body.new_value||'').trim();
+  assertValid(value.length>=2&&value.length<=500,'Giá trị mới phải có từ 2 đến 500 ký tự.');
+  if(req.body.field_name==='email')assertValid(isValidEmail(value),'Email không đúng định dạng.');
+  if(req.body.field_name==='phone')assertValid(isValidPhone(value),'Số điện thoại không đúng định dạng.');
+  const employee=await Employees.findOne({id:employeeId}).lean();
+  assertValid(employee,'Không tìm thấy hồ sơ nhân viên.');
+  const id=await nextId('employee_change_requests');
+  await EmployeeChangeRequests.create({id,employee_id:employeeId,user_id:req.auth.user.id,field_code:req.body.field_name,old_value:employee[req.body.field_name]??null,new_value:value,request_note:String(req.body.reason||'').trim().slice(0,1000)||null,status:'pending',reviewed_by:null,reviewed_at:null,review_note:null,created_at:new Date(),updated_at:new Date()});
+  await audit(req,{module:'self_service',action:'request',recordType:'employee_change_request',recordId:id,employeeId,description:`Yêu cầu cập nhật ${req.body.field_name}`});
+  res.status(201).json({id});
+});
 router.get('/requests',can('employee.update'),async(req,res)=>{const items=await EmployeeChangeRequests.find({}).sort({id:-1}).lean(),emps=await Employees.find({id:{$in:items.map(x=>x.employee_id)}}).lean();const em=new Map(emps.map(x=>[Number(x.id),x]));res.json({items:items.map(x=>({...x,employee_name:em.get(Number(x.employee_id))?.full_name||''}))});});
-router.post('/requests/:id/review',can('employee.update'),async(req,res)=>{const id=Number(req.params.id),r=await EmployeeChangeRequests.findOne({id,status:'pending'}).lean();if(!r)return res.status(404).json({message:'Yêu cầu không còn chờ duyệt.'});const status=req.body.status==='approved'?'approved':'rejected';if(status==='approved')await Employees.updateOne({id:Number(r.employee_id)},{$set:{[r.field_code]:r.new_value,updated_at:new Date()}});await EmployeeChangeRequests.updateOne({id},{$set:{status,reviewed_by:req.auth.user.id,reviewed_at:new Date(),review_note:req.body.review_note||null,updated_at:new Date()}});await audit(req,{module:'self_service',action:'review',recordType:'employee_change_request',recordId:id,employeeId:r.employee_id,description:`${status==='approved'?'Duyệt':'Từ chối'} yêu cầu cập nhật ${r.field_code}`});res.json({ok:true});});
+router.post('/requests/:id/review',can('employee.update'),async(req,res)=>{
+  assertValid(['approved','rejected'].includes(req.body.status),'Trạng thái duyệt không hợp lệ.');
+  const id=Number(req.params.id),r=await EmployeeChangeRequests.findOne({id,status:'pending'}).lean();
+  if(!r)return res.status(404).json({message:'Yêu cầu không còn chờ duyệt.'});
+  const status=req.body.status;
+  if(status==='approved')await Employees.updateOne({id:Number(r.employee_id)},{$set:{[r.field_code]:r.new_value,updated_at:new Date()}});
+  await EmployeeChangeRequests.updateOne({id},{$set:{status,reviewed_by:req.auth.user.id,reviewed_at:new Date(),review_note:String(req.body.review_note||'').trim().slice(0,1000)||null,updated_at:new Date()}});
+  await audit(req,{module:'self_service',action:'review',recordType:'employee_change_request',recordId:id,employeeId:r.employee_id,description:`${status==='approved'?'Duyệt':'Từ chối'} yêu cầu cập nhật ${r.field_code}`});
+  res.json({ok:true});
+});
 export default router;
