@@ -1,0 +1,154 @@
+﻿# =====================================================
+# TH79 HRM Backend - CD Pipeline
+# develop -> Deploy Staging (VPS staging)
+# main    -> Deploy Production (VPS production)
+# =====================================================
+name: CD - Deploy to VPS
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  # ==================================================
+  # STAGING: deploy khi push vào develop
+  # ==================================================
+  deploy-staging:
+    name: "Deploy Staging (develop)"
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://api.hrm.daututh79.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy Staging to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            echo "🟡 STAGING deployment starting..."
+
+            APP_DIR="${{ secrets.VPS_PROJECT_PATH }}"
+            APP_NAME="th79-hrm-staging"
+            cd "$APP_DIR"
+
+            # Backup
+            git stash --include-untracked 2>/dev/null || true
+
+            # Pull develop branch
+            git fetch origin develop
+            git checkout develop 2>/dev/null || git checkout -b develop origin/develop
+            git reset --hard origin/develop
+
+            # Install
+            npm ci --production
+
+            # Restart staging PM2 process
+            if pm2 list | grep -q "$APP_NAME"; then
+              pm2 restart "$APP_NAME" --update-env
+            else
+              PORT=5001 pm2 start src/server.js --name "$APP_NAME" --env production
+            fi
+            pm2 save
+
+            echo "✅ Staging deployment completed!"
+
+      - name: Staging health check
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.hrm.daututh79.com/api 2>/dev/null || echo "000")
+          echo "Staging health: HTTP $STATUS"
+
+  # ==================================================
+  # PRODUCTION: deploy khi push vào main
+  # ==================================================
+  deploy-production:
+    name: "Deploy Production (main)"
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://api.hrm.daututh79.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy Production to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            echo "🟢 PRODUCTION deployment starting..."
+
+            APP_DIR="${{ secrets.VPS_PROJECT_PATH }}"
+            APP_NAME="th79-hrm"
+            cd "$APP_DIR"
+
+            # Backup current version
+            BACKUP_TAG="pre-deploy-$(date +%Y%m%d-%H%M%S)"
+            git tag "$BACKUP_TAG" 2>/dev/null || true
+
+            # Pull main branch
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+
+            # Install
+            npm ci --production
+
+            # Restart production PM2 process
+            if pm2 list | grep -q "$APP_NAME"; then
+              pm2 restart "$APP_NAME" --update-env
+            else
+              pm2 start src/server.js --name "$APP_NAME" --env production
+            fi
+            pm2 save
+
+            echo "✅ Production deployment completed!"
+
+      - name: Production health check
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.hrm.daututh79.com/api 2>/dev/null || echo "000")
+          echo "Production health: HTTP $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+            echo "✅ API is healthy!"
+          else
+            echo "⚠️ HTTP $STATUS - may need manual check"
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Production Deploy Failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Deployment Failure\n\n- **Commit:** \`${context.sha.substring(0, 7)}\`\n- **Branch:** ${context.ref}\n- **Run:** [View logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\nPlease investigate immediately.`,
+              labels: ['deployment', 'bug']
+            })

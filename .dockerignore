@@ -1,0 +1,14 @@
+﻿node_modules
+.env
+.git
+.github
+.vscode
+deploy
+data-backup
+data-backup.rar
+uploads/*
+!uploads/.gitkeep
+tests
+*.md
+npm-debug.log*
+ecosystem.config.*
