@@ -55,7 +55,7 @@ function setAuthCookie(res, token) {
 router.post('/login', async (req, res, next) => {
   try {
     const login = String(req.body?.login || '').trim();
-    const password = String(req.body?.password || '');
+    const password = String(req.body?.password || '').trim();
     if (!login || !password) return res.status(400).json({ message: 'Vui lòng nhập tài khoản và mật khẩu.' });
 
     const loginRegex = new RegExp(`^${login.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
@@ -77,7 +77,7 @@ router.post('/login', async (req, res, next) => {
     if (String(rawPassword).trim() === password && user._id) {
       await Users.updateOne(
         { _id: user._id },
-        { $set: { password_hash: await bcrypt.hash(password, 12) }, $unset: { password: 1, passwordHash: 1 } }
+        { $set: { password_hash: await bcrypt.hash(password, 10) }, $unset: { password: 1, passwordHash: 1 } }
       );
     }
 
@@ -166,8 +166,8 @@ router.get('/me', requireAuth, (req, res) => res.json({ user: safeAuth(req.auth)
 
 router.post('/change-password', requireAuth, async (req, res, next) => {
   try {
-    const currentPassword = String(req.body?.current_password || '');
-    const newPassword = String(req.body?.new_password || '');
+    const currentPassword = String(req.body?.current_password || '').trim();
+    const newPassword = String(req.body?.new_password || '').trim();
     if (!currentPassword || newPassword.length < 8 || newPassword.length > 72) {
       return res.status(400).json({ message: 'Mật khẩu mới phải có từ 8 đến 72 ký tự.' });
     }
@@ -183,7 +183,7 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
     const authVersion = Number(user.auth_version || 0) + 1;
     const updatedUser = {
       ...user,
-      password_hash: await bcrypt.hash(newPassword, 12),
+      password_hash: await bcrypt.hash(newPassword, 10),
       must_change_password: false,
       auth_version: authVersion,
       updated_at: new Date()

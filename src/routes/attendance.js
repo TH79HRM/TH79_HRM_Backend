@@ -411,9 +411,23 @@ router.post('/scan', async (req, res, next) => {
       assertValid(await WorkShifts.findOne({ id: { $in: idVariants(shift_id) }, status: 'active' }).lean(), 'Không tìm thấy ca làm việc đang hoạt động.');
     }
 
-    // Non-managers can only self-check-in for their own employee_id unless using physical biometric kiosk
-    const isManager = req.auth?.isSuperAdmin || req.auth?.permissions?.includes('*') || req.auth?.permissions?.includes('attendance.manage') || req.auth?.permissions?.includes('attendance.view');
-    const targetEmployeeId = (!isManager && method === 'manual') ? req.auth?.user?.employee_id : employee_id;
+    // Only accounts with attendance.manage (or Super Admin) can punch attendance for other employees.
+    // Regular employees can only check in/out for their own linked employee_id regardless of scan method.
+    const canCheckInOthers = Boolean(
+      req.auth?.isSuperAdmin ||
+      req.auth?.permissions?.includes('*') ||
+      req.auth?.permissions?.includes('attendance.manage')
+    );
+    const ownEmployeeId = req.auth?.user?.employee_id ? Number(req.auth.user.employee_id) : null;
+    if (!canCheckInOthers) {
+      if (!ownEmployeeId) {
+        return res.status(403).json({ message: 'Tài khoản chưa được liên kết hồ sơ nhân viên để tự chấm công.' });
+      }
+      if (employee_id !== undefined && employee_id !== null && employee_id !== '' && Number(employee_id) !== ownEmployeeId) {
+        return res.status(403).json({ message: 'Bạn chỉ được phép chấm công cho chính mình. Chỉ tài khoản được phân quyền quản lý mới có thể chấm công cho người khác.' });
+      }
+    }
+    const targetEmployeeId = !canCheckInOthers ? ownEmployeeId : employee_id;
 
     const identified = await verifyAndIdentify({
       method,
@@ -424,6 +438,10 @@ router.post('/scan', async (req, res, next) => {
       credential_id,
       pin_code
     });
+
+    if (!canCheckInOthers && Number(identified.employee?.id) !== ownEmployeeId) {
+      return res.status(403).json({ message: 'Mã định danh hoặc sinh trắc học không khớp với tài khoản đang đăng nhập. Bạn không thể chấm công thay người khác.' });
+    }
 
     const result = await recordAttendancePunch({
       employee: identified.employee,

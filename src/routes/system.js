@@ -108,8 +108,8 @@ async function validateUserPayload({ username, email, password, status, employee
   const cleanUsername = String(username || '').trim();
   assertValid(/^[A-Za-z0-9._-]{3,64}$/.test(cleanUsername), 'Tên tài khoản phải có 3–64 ký tự chữ, số, dấu chấm, gạch ngang hoặc gạch dưới.');
   if (email) assertValid(isValidEmail(String(email).trim()), 'Email không đúng định dạng.');
-  if (requirePassword || password) {
-    const cleanPassword = String(password || '');
+  if (requirePassword || (password !== undefined && String(password).trim() !== '')) {
+    const cleanPassword = String(password || '').trim();
     assertValid(cleanPassword.length >= 8 && cleanPassword.length <= 72, 'Mật khẩu phải có từ 8 đến 72 ký tự.');
   }
   if (status !== undefined) assertValid(['active', 'inactive', 'locked', 'disabled'].includes(status), 'Trạng thái tài khoản không hợp lệ.');
@@ -476,8 +476,8 @@ router.post('/users', can('user.manage'), async (req, res, next) => {
     await assertUniqueEmployeeLink(req.body.employee_id);
 
     const id = await nextId('users');
-    const password = String(req.body.password);
-    const hash = await bcrypt.hash(password, 12);
+    const password = String(req.body.password || '').trim();
+    const hash = await bcrypt.hash(password, 10);
     const row = {
       id,
       employee_id: req.body.employee_id ? Number(req.body.employee_id) : null,
@@ -535,9 +535,9 @@ router.put('/users/:id', can('user.manage'), async (req, res, next) => {
       status: requestedStatus,
       updated_at: new Date()
     };
-    if (req.body.password) {
-      const password = String(req.body.password);
-      set.password_hash = await bcrypt.hash(password, 12);
+    const trimmedPassword = req.body.password !== undefined ? String(req.body.password).trim() : '';
+    if (trimmedPassword) {
+      set.password_hash = await bcrypt.hash(trimmedPassword, 10);
       set.must_change_password = true;
       set.auth_version = Number(target.auth_version || 0) + 1;
     }
